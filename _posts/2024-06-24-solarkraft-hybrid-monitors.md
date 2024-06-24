@@ -86,8 +86,8 @@ As can be seen, a direct method monitor is decomposed into a collection of indep
   - The property "only the approved claimant may claim the deposit" is ensured by the <font style="background: #fd4d4d;">NonClaimant</font> sub-monitor;
   - The property "the Timelock contract receives the deposited funds from the claimant" is ensured by the combination of <font style="background: #fd4d4d;">NotEnoughBalance</font> and  <font style="background: #ffe342;">TokenTransferred</font> sub-monitors.
  - _Liveness_: Timelock's liveness properties are guaranteed by the <font style="background: #54c45e;">MustPass</font> conditions: 
-  - Implicit in case of `deposit` (whatever doesn't fail, should succeed);
-  - Explicit in case of `claim`: a claim happening before the time bound, when its kind is `Before`, should succeed due to <font style="background: #54c45e;">BeforeTimeBound</font> (provided all other conditions are met); similarly, a claim happening after the time bound, when its kind is `After`, should succeed due to <font style="background: #54c45e;">AfterTimeBound</font>.
+   - Implicit in case of `deposit` (whatever doesn't fail, should succeed);
+   - Explicit in case of `claim`: a claim happening before the time bound, when its kind is `Before`, should succeed due to <font style="background: #54c45e;">BeforeTimeBound</font> (provided all other conditions are met); similarly, a claim happening after the time bound, when its kind is `After`, should succeed due to <font style="background: #54c45e;">AfterTimeBound</font>.
 
 
 Can the described approach of direct monitors be considered satisfactory? Please stop to think about it for a sec, before opening our answer below.
