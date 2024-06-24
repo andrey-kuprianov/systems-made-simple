@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "The Force Awakens: Hybrid Blockchain Runtime Monitors"
-date: 2024-06-23
+date: 2024-06-24
 categories: 
   - "solarkraft"
 tags: 
