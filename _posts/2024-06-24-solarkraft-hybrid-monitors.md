@@ -121,7 +121,7 @@ In reverse monitors, we distinguish two kinds of conditions:
 - `MonitorTrigger_i` is a condition over past and next state variables, which triggers (activates) the monitor. If _any_ of those conditions hold, the monitor is activated. These conditions should not be confused with preconditions `MustFail/MustPass` from direct monitors: unlike those, a `MonitorTrigger` can express conditions like _"a state variable has changed its value."_
 - `MonitorEffect_i` is a condition over past and next state variables, which specifies the effect that the monitor, if activated, should check. _All_ of `MonitorEffect_i` should hold if the transaction is successful. These conditions are the same as `MustHold` in direct monitors, and express a post-condition. 
 
-_Thus, the main difference wrt. direct monitors is how monitor activation is expressed: while direct monitors are activated by observing a cause (a method invocation with specific parameters), reverse monitors are activated by observing the effect (a change in state variables)._
+_Thus, the main difference wrt. direct monitors is how monitor activation is expressed: while direct monitors are activated by observing the cause (a method invocation with specific parameters), reverse monitors are activated by observing the effect (a change in state variables)._
 
 In the above, `Monitor<Trigger|Effect>` is a prefix, which tells the monitor system how to interpret this predicate. The complete pattern for predicate names with these prefixes is as follows:
 
