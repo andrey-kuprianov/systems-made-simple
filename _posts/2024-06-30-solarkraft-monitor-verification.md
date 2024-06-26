@@ -21,10 +21,9 @@ tags:
 
 _Solarkraft has been developed in collaboration by [Igor Konnov][], [Jure Kukovec][], [Andrey Kuprianov][] and [Thomas Pani][]._
 
-_This is the fifth and last in a series of blog posts introducing [Solarkraft][], a TLA+-based runtime monitoring solution for [Soroban smart contracts][Soroban]. The first post,_ ["A New Hope – Why Smart Contract Bugs Matter and How Runtime Monitoring Saves the Day"][part1] _gives an overview of smart contracts, explains how traditional security fails to address major challenges in securing crypto assets, and introduces runtime monitoring as a solution. The second post,_ ["Guardians of the Blockchain: Small and Modular Runtime Monitors in TLA+ for Soroban Smart Contracts"][part2] _introduces the language of Solarkraft monitors. The third post,_ ["How to Run Solarkraft"][part3] _gives an overview of the various features of Solarkraft, and explains how to use each one, step-by-step. 
+_This is the fifth and last in a series of blog posts introducing [Solarkraft][], a TLA+-based runtime monitoring solution for [Soroban smart contracts][Soroban]. The first post,_ ["A New Hope – Why Smart Contract Bugs Matter and How Runtime Monitoring Saves the Day"][part1] _gives an overview of smart contracts, explains how traditional security fails to address major challenges in securing crypto assets, and introduces runtime monitoring as a solution. The second post,_ ["Guardians of the Blockchain: Small and Modular Runtime Monitors in TLA+ for Soroban Smart Contracts"][part2] _introduces the language of Solarkraft monitors. The third post,_ ["How to Run Solarkraft"][part3] _gives an overview of the various features of Solarkraft, and explains how to use each one, step-by-step. The forth post, _ ["The Force Awakens: Hybrid Blockchain Runtime Monitors"][part4] _explores the distinctions between direct and reverse blockchain monitors._
 
-
-While the previous posts explain the current state of the project, in this one we take one step further, and explore the direction in which we plan to evolve blockchain runtime monitoring with Solarkraft. Throughout the post we are using the same [`timelock` contract][timelock] from `soroban-examples` that was used in [part 2][part2]; please explore at least this part first to acquire the necessary context.
+In this post we first formally define what are hybrid blockchain runtime monitors (from the formal methods point of view), as then proceed to explore the far-reaching avenues of how to go from _offline monitoring_, as done now in Solarkraft, to truly _online monitoring_ on the live blockchain.
 
 
 ## Verifying Blockchain Monitors
@@ -53,18 +52,18 @@ Blockchain states are mutated by _transactions_, where each transaction is an in
 
 For our purposes we consider only the state as it's relevant for a single contract and its variables. Thus we will use the following notations:
 
-- $$D$$ is a set of all possible data values: strings, numbers, structs, etc. Mathematically we don't distinguish between different data types (though practically we of course do).
-- $$V$$ is a set of typed contract variables.
-- $$S = S_0, S_1, ...$$ is a sequence of states.
+- $$D$$ is the set of all possible data values: strings, numbers, structs, etc. Mathematically we don't distinguish between different data types (though practically we of course do).
+- $$V$$ is the set of typed contract variables.
+- $$S = S_0, S_1, ...$$ is the sequence of states.
 - $$S_i \subseteq V \rightarrow D$$ is the $$i$$-th contract state, which is a partial mapping from variables to their data values. If a variable $$v$$ is present in the mapping $$S_i$$, we say that it _exists_ in this state.
-- $$T = T_0, T_1, ...$$ is a sequence of transactions. Each transaction brings the contract into its next state, which we denote by $$S_i \xrightarrow{T_i} S_{i+1}$$.
-- $$P_T$$ is a set of all possible typed method parameters.
+- $$T = T_0, T_1, ...$$ is the sequence of transactions. Each transaction brings the contract into its next state, which we denote by $$S_i \xrightarrow{T_i} S_{i+1}$$.
+- $$P_T$$ is the set of all possible typed method parameters.
 - $$T_i \subseteq P_T \rightarrow D$$: each transaction is a method invocation, represented by a partial mapping from method parameter names to their values; only the parameters specific to the invoked method are present in the mapping.
-- $$E = E_0, E_1, ...$$ is a blockchain environment, which is sequence of environment states; each transaction executes in a specific environment state.
-- $$P_E$$ is a set of all typed environment parameters (such as `current_contract_address` or `ledger_timestamp`).
-- $$E_i = P_E \rightarrow D$$ defines the blockchain environment, which is a mapping from environment parameters to their values.
+- $$E = E_0, E_1, ...$$ is the blockchain environment, which is a sequence of environment states; each transaction executes in a specific environment state.
+- $$P_E$$ is the set of all typed environment parameters (such as `current_contract_address` or `ledger_timestamp`).
+- $$E_i = P_E \rightarrow D$$ is a mapping from environment parameters to their values, and defines the current blockchain environment, in which $$T_i$$ executes.
 
-The above definitions define the structure of the object to which we apply monitor specifications: a contract, executing on a blockchain. Now it's time to define the structure of specifications themselves. As checking each direct method specification or reverse effect specification is independent from others, we define only the structure for individual monitors.
+The above definitions describe the structure of the object to which we apply monitor specifications: a smart contract, executing on a blockchain. Now it's time to define the structure of monitor specifications themselves. As checking each direct method specification or reverse effect specification is independent from others, we define only the structure for individual monitors.
 
 - $$M_D = \langle F, P, H \rangle$$ is a direct method monitor specification, where the components are the finite sets of `MustFail`, `MustPass`, and `MustHold` conditions respectively.
 - $$M_R = \langle C, A \rangle$$ is a reverse effect monitor specification, where the components are the finite sets of `MonitorCheck` and `MonitorAssert` conditions respectively.
@@ -98,6 +97,7 @@ _Development of Solarkraft was supported by the [Stellar Development Foundation]
 [part1]: https://thpani.net/2024/06/why-smart-contract-bugs-matter-and-how-runtime-monitoring-saves-the-day-solarkraft-1/
 [part2]: https://thpani.net/2024/06/small-and-modular-runtime-monitors-in-tla-for-soroban-smart-contracts-solarkraft-2/
 [part3]: https://protocols-made-fun.com/solarkraft/2024/06/19/solarkraft-part3.html
+[part4]: https://systems-made-simple.dev/solarkraft/2024/06/24/solarkraft-hybrid-monitors.html
 
 [Igor Konnov]: https://konnov.phd
 [Jure Kukovec]: https://www.linkedin.com/in/jure-kukovec/
