@@ -118,20 +118,20 @@ With reverse reasoning we will try to patch the loopholes that were left by dire
 
 In reverse monitors, we distinguish two kinds of conditions:
 
-- `MonitorTrigger_i` is a condition over past and next state variables, which triggers (activates) the monitor. If _any_ of those conditions hold, the monitor is activated. These conditions should not be confused with preconditions `MustFail/MustPass` from direct monitors: unlike those, a `MonitorTrigger` can express conditions like _"a state variable has changed its value."_
-- `MonitorEffect_i` is a condition over past and next state variables, which specifies the effect that the monitor, if activated, should check. _All_ of `MonitorEffect_i` should hold if the transaction is successful. These conditions are the same as `MustHold` in direct monitors, and express a post-condition. 
+- `MonitorCheck_i` is a condition over past and next state variables, which activates the monitor. If _any_ of those conditions hold, the monitor is activated. These conditions should not be confused with preconditions `MustFail/MustPass` from direct monitors: unlike those, a `MonitorCheck` can express conditions like _"a state variable has changed its value."_ 
+- `MonitorAssert_i` is a condition over past and next state variables, which the monitors requires . _All_ of `MonitorAssert_i` should hold if the transaction is successful. These conditions are the same as `MustHold` in direct monitors, and express a post-condition. 
 
-_Thus, the main difference wrt. direct monitors is how monitor activation is expressed: while direct monitors are activated by observing the cause (a method invocation with specific parameters), reverse monitors are activated by observing the effect (a change in state variables)._
+_Thus, the main difference wrt. direct monitors is how monitor activation is expressed: while direct monitors are activated by observing the cause (a method invocation with specific parameters), reverse monitors are activated by observing the effect (a change in state variables). Another difference is that `Monitor<Check|Assert>` conditions are method-unspecific, and can refer only to the state variables and the environment, but not to the method parameters._ 
 
-In the above, `Monitor<Trigger|Effect>` is a prefix, which tells the monitor system how to interpret this predicate. The complete pattern for predicate names with these prefixes is as follows:
+In the above, `Monitor<Check|Assert>` is a prefix, which tells the monitor system how to interpret this predicate. The complete pattern for predicate names with these prefixes is as follows:
 
 ```
-Monitor<Trigger|Effect>_<Monitor>_<ConditionDescription>
+Monitor<Check|Assert>_<Monitor>_<ConditionDescription>
 ```
 
 All predicates which refer to the same `<Monitor>` will be grouped, to create together one _effect monitor_. Interpreted formally, the monitor should do the following when activated:
 
-- If _any_ of `MonitorTrigger_i` conditions hold, check that _all_ `MonitorEffect_i` hold over the past and next states (otherwise, issue a warning / revert if configured to do so)
+- If _any_ of `MonitorCheck_i` conditions hold, ensure that _all_ `MonitorAssert_i` hold over the past and next states (otherwise, issue a warning / revert if configured to do so)
 
 Again, imposing a simple structure which combines triggers with _or_, but effects with _and_ allows you to avoid cumbersome logic inside monitor predicates.
 
@@ -145,7 +145,7 @@ Let's take a look at how reverse monitor specs help us to patch the loopholes de
 
 ### Reverse monitors for the Timelock contract
 
-We apply the general structure of reverse monitors to the [Timelock contract][timelock]; below we depict only the structure of Timelock's reverse monitors (we omit `Monitor<Trigger|Effect>` as well as the monitor names for clarity). 
+We apply the general structure of reverse monitors to the [Timelock contract][timelock]; below we depict only the structure of Timelock's reverse monitors (we omit `Monitor<Check|Assert>` as well as the monitor names for clarity). 
 
 ![Timelock reverse monitors](/img/TimelockReverseMonitors.png)
 
@@ -163,6 +163,9 @@ We will soon expand this blog post series with the final one, _"The Rise of Mode
 
 _Development of Solarkraft was supported by the [Stellar Development Foundation][] with a generous Activation Award from the [Stellar Community Fund][] of 50,000 USD in XLM._
 
+-----
+
+_Updated on 26.06.2024: replaced `Monitor<Trigger|Effect>` with `Monitor<Check|Assert>`_
 
 
 [Solarkraft]: https://github.com/freespek/solarkraft
