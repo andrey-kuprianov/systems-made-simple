@@ -79,7 +79,7 @@ In the above:
 
 Now we are in a position to formally specify verification conditions for blockchain monitors.
 
-For a direct blockchain monitor $$M_D = \langle F, P, H \rangle$$, we combine individual monitor conditions into larger ones:
+**For a direct blockchain monitor** $$M_D = \langle F, P, H \rangle$$, we combine individual monitor conditions into larger ones:
 
 $$\mathbb{C}_{\mathit{Fail}} = \bigvee_{j}{F_j}$$
 
@@ -99,6 +99,17 @@ Given the above combined conditions, we check these verification conditions:
 
 Please feel free to contrast these formal verification conditions with the [informal conditions from the previous post][part4directmonitors]. Notice also that the two implications from the pairs "Must fail"/"Failure completeness" and "Must succeed"/"Success completeness" encode together an equivalence between the checks and the transaction execution result. Nevertheless, we consider it a better strategy to treat these conditions separately, as this allows the developers to encode a more fine-grained monitor response. For example, a monitor may forcefully revert a transaction that violates the "Must fail" condition, but only issue a warning when "Failure completeness" is violated.
 
+**For a reverse blockchain monitor** $$M_R = \langle C, A \rangle$$, we also combine individual monitor conditions into larger ones:
+
+$$\mathbb{C}_{\mathit{Check}} = \bigvee_{j}{C_j}$$
+
+$$\mathbb{C}_{\mathit{Assert}} = \bigwedge_{j}{A_j}$$
+
+Reverse monitors encode only a single verification condition:
+
+| Name | Verification condition |
+| -----| ---------------------- |
+| Effect correctness | $$X_i = \top \wedge \mathbb{C}_{\mathit{Check}} \implies \mathbb{C}_{\mathit{Assert}}$$ |
 
 ### Monitor verification complexity
 
