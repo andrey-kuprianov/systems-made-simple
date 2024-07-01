@@ -120,7 +120,7 @@ _Model checking_ is an automatic procedure of verifying mathematical specificati
 
 - Apalache is a _general purpose_ model checker, in that it performs _invariant checking_: given an initial system state $$\mathit{Init}$$, an encoding of the system transitions (the _next-state relation_) $$\mathit{Next}$$, and an encoding of a supposed system invariant $$\mathit{Inv}$$, it checks whether the invariant does indeed hold in all system states reachable from the initial one by executing system transitions.
 - Apalache is a _bounded_ model checker: it can check invariants only in states reachable in a certain number of transition steps (the execution bound $$\mathit{Length}$$, say 1, 5, or 10) from the initial state.
-- Apalache is a _symbolic_ model checker, i.e. it encodes the the verification conditions symbolically, as formulas in certain logical theories, and passes the resulting encoding to _SMT solvers_, which are specialized tools for solving massive volumes of equations.
+- Apalache is a _symbolic_ model checker, i.e. it encodes the the verification conditions symbolically, as formulas in certain logical theories, and passes the resulting encoding to _Satisfiability Modulo Theories (SMT) solvers_, which are specialized tools for solving massive volumes of math equations.
 
 We employ Apalache by encoding monitor verification conditions as an invariant checking problem. For any given blockchain environment $$E_i$$, the transaction pre-state $$S_i$$, the transaction being executed $$T_i$$, the transaction execution result $$X_i$$, the transaction post-state $$S_{i+1}$$, as well as any of the above verification conditions $$\mathit{VC}$$, we execute Apalache using the following encoding:
 
@@ -130,6 +130,15 @@ We employ Apalache by encoding monitor verification conditions as an invariant c
 - Execution bound: $$\mathit{Length} = 1$$
 
 
+A few TLA+ tests for Apalache verification conditions can be found e.g. in [deposit_test.tla](https://github.com/freespek/solarkraft/blob/cf26a544ab204220eab62a3545300cb689aa899b/doc/case-studies/timelock/deposit_test.tla) (for the direct monitor of Timelock's `deposit` method), or in [balance_record_test.tla](https://github.com/freespek/solarkraft/blob/cf26a544ab204220eab62a3545300cb689aa899b/doc/case-studies/timelock/balance_record_test.tla) (for the reverse balance record monitor). In all cases Apalache is invoked in a similar fashion, e.g. like that for `deposit`'s first test:
+
+```sh
+apalache-mc check --length=1 --init=Init_1 --next=Next_1 deposit_test.tla
+```
+
+As explained above, Apalache is a _bounded_ model checker, but, specifically for monitoring, this restriction is irrelevant: Apalache is blazing fast at checking the above formulas!
+
+One important point of consideration is the flexibility of encoding monitor verification conditions for model checking. While in the above tests a monolithic encoding is used, they can also be encoded fine-grained, down to the smallest scale of a single direct monitor condition (one of $$F_j$$, $$P_j$$, $$H_j$$), or of a single reverse monitor condition (one of $$C_j$$, $$A_j$$). While for the Timelock example it doesn't make any difference wrt. the Apalache execution speed (it's very fast both at the finest and at the coarsest level), for other monitors the difference may be substantial; we will return to this point later on.
 
 ### Practical checking of monitor specifications
 
