@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "The Rise of Model Checker: Verifying Blockchain Monitors In and Near Realtime"
-date: 2024-06-30
+date: 2024-07-07
 categories: 
   - "solarkraft"
 tags: 
@@ -53,15 +53,16 @@ Blockchain states are mutated by _transactions_, where each transaction is an in
 For our purposes we consider only the state as it's relevant for a single contract and its variables. Thus we will use the following notations:
 
 - $$D$$ is the set of all possible data values: strings, numbers, structs, etc. Mathematically we don't distinguish between different data types (though practically we of course do).
-- $$V$$ is the set of typed contract variables.
+- $$V$$ is the set of typed contract variables. At this stage we don't distinguish between states of different contracts: logical assertions may refer to the state of any contract (e.g. to token balances in other contracts).
 - $$S = S_0, S_1, ...$$ is the sequence of states.
 - $$S_i \subseteq V \rightarrow D$$ is the $$i$$-th contract state, which is a partial mapping from variables to their data values. If a variable $$v$$ is present in the mapping $$S_i$$, we say that it _exists_ in this state.
 - $$T = T_0, T_1, ...$$ is the sequence of transactions. Each transaction brings the contract into its next state, which we denote by $$S_i \xrightarrow{T_i} S_{i+1}$$.
 - $$P_T$$ is the set of all possible typed method parameters.
 - $$T_i \subseteq P_T \rightarrow D$$: each transaction is a method invocation, represented by a partial mapping from method parameter names to their values; only the parameters specific to the invoked method are present in the mapping.
 - $$E = E_0, E_1, ...$$ is the blockchain environment, which is a sequence of environment states; each transaction executes in a specific environment state.
-- $$P_E$$ is the set of all typed environment parameters (such as `current_contract_address` or `ledger_timestamp`).
+- $$P_E$$ is the set of all typed environment parameters (such as `current_contract_address`, `ledger_timestamp`, or `method_name`).
 - $$E_i = P_E \rightarrow D$$ is a mapping from environment parameters to their values, and defines the current blockchain environment, in which $$T_i$$ executes.
+- $$X_i \in \mathbb{B} = \{ \top, \bot \}$$ is the result of executing the transaction $$T_i$$: $$\top$$ in case of success, $$\bot$$ in case of failure.
 
 The above definitions describe the structure of the object to which we apply monitor specifications: a smart contract, executing on a blockchain. Now it's time to define the structure of monitor specifications themselves. As checking each direct method specification or reverse effect specification is independent from others, we define only the structure for individual monitors.
 
@@ -70,9 +71,33 @@ The above definitions describe the structure of the object to which we apply mon
 
 In the above:
 
-- $$F, P \subseteq (E_i, S_i, T_i) \rightarrow \mathbb{B}$$ are boolean conditions of the past state and the method parameters.
-- $$H \subseteq (E_i, S_i, T_i) \times S_{i+1} \rightarrow \mathbb{B}$$ are boolean conditions of the environment state, the past state, the method parameters, and the next state.
-- $$C, A \subseteq (E_i, S_i) \times S_{i+1} \rightarrow \mathbb{B}$$ are boolean conditions defined over the environment state, the past state, and the next state.
+- For any $$F_j \in F$$, $$P_k \in P$$ we have $$F_j, P_k \subseteq (E_i, S_i, T_i) \rightarrow \mathbb{B}$$ are boolean conditions of the environment state, the past contract state, and the method parameters.
+-  For any $$H_j \in H$$ we have $$H_j \subseteq (E_i, S_i, T_i) \times S_{i+1} \rightarrow \mathbb{B}$$ are boolean conditions of the environment state, the past contract state, the method parameters, and the next contract state.
+- For any $$C_j \in C$$, $$A_k \in A$$ we have $$C_j, A_k \subseteq (E_i, S_i) \times S_{i+1} \rightarrow \mathbb{B}$$ are boolean conditions defined over the environment state, the past contract state, and the next contract state.
+
+### Verification Conditions for Blockchain Monitors
+
+Now we are in a position to formally specify verification conditions for blockchain monitors.
+
+For a direct blockchain monitor $$M_D = \langle F, P, H \rangle$$, we combine individual monitor conditions into larger ones:
+
+$$\mathbb{C}_{\mathit{Fail}} = \bigvee_{j}{F_j}$$
+
+$$\mathbb{C}_{\mathit{Pass}} = \bigvee_{j}{P_j}$$
+
+$$\mathbb{C}_{\mathit{Hold}} = \bigwedge_{j}{H_j}$$
+
+Given the above combined conditions, we check these verification conditions:
+
+| Name | Verification condition |
+| -----| ---------------------- |
+| Must fail | $$\mathbb{C}_{\mathit{Fail}}  \implies X_i = \bot$$ |
+| Failure completeness | $$X_i = \bot \implies \mathbb{C}_{\mathit{Fail}}$$ |
+| Must succeed | $$\neg \mathbb{C}_{\mathit{Fail}} \wedge \mathbb{C}_{\mathit{Pass}} \implies X_i = \top$$ |
+| Success completeness | $$X_i = \top \implies \neg \mathbb{C}_{\mathit{Fail}} \wedge \mathbb{C}_{\mathit{Pass}}$$ |
+| Method correctness  | $$X_i = \top \implies \mathbb{C}_{\mathit{Hold}}$$ |
+
+Please feel free to contrast these formal verification conditions with the [informal conditions from the previous post][part4directmonitors]. Notice also that the two implications from the pairs "Must fail"/"Failure completeness" and "Must succeed"/"Success completeness" encode together an equivalence between the checks and the transaction execution result. Nevertheless, we consider it a better strategy to treat these conditions separately, as this allows the developers to encode a more fine-grained monitor response. For example, a monitor may forcefully revert a transaction that violates the "Must fail" condition, but only issue a warning when "Failure completeness" is violated.
 
 
 ### Monitor verification complexity
@@ -98,6 +123,7 @@ _Development of Solarkraft was supported by the [Stellar Development Foundation]
 [part2]: https://thpani.net/2024/06/small-and-modular-runtime-monitors-in-tla-for-soroban-smart-contracts-solarkraft-2/
 [part3]: https://protocols-made-fun.com/solarkraft/2024/06/19/solarkraft-part3.html
 [part4]: https://systems-made-simple.dev/solarkraft/2024/06/24/solarkraft-hybrid-monitors.html
+[part4directmonitors]: https://systems-made-simple.dev/solarkraft/2024/06/24/solarkraft-hybrid-monitors.html#direct-monitors
 
 [Igor Konnov]: https://konnov.phd
 [Jure Kukovec]: https://www.linkedin.com/in/jure-kukovec/
