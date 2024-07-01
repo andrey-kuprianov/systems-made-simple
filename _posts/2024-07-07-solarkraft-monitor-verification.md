@@ -46,11 +46,11 @@ If you are still interested in the details -- continue reading!
 
 ## Blockchain Runtime Monitors in Formal Attire 👔
 
-Formally, a blockchain is a sequence of _ledgers_, where each ledger is a snapshot of the blockchain _state_. States are partitioned: first into separate spaces per contract, and then into separate regions per contract variable. 
+In this section we define, using mathematical notation, what blockchain monitors are, and how to verify whether a blockchain transaction satisfies the conditions expressed by a monitor.
 
-Blockchain states are mutated by _transactions_, where each transaction is an invocation of a certain contract _method_ with the corresponding method parameters supplied. The invoked method modifies the states according to its logic.
+Formally, a blockchain is a sequence of _ledgers_, where each ledger is a snapshot of the blockchain _environment_ and the blockchain _state_. States are partitioned: first into separate spaces per contract, and then into separate regions per contract variable. Blockchain states are mutated by _transactions_, where each transaction is an invocation of a certain contract _method_ with the corresponding method parameters supplied. The invoked method modifies the states according to its logic. A successful transaction bring the blockchain from one environment/state to the next; a rejected/reverted transaction leaves the blockchain environment/state unchanged. We assume that unsuccessful transactions can be still observed.
 
-For our purposes we consider only the state as it's relevant for a single contract and its variables. Thus we will use the following notations:
+We employ the following notation:
 
 - $$D$$ is the set of all possible data values: strings, numbers, structs, etc. Mathematically we don't distinguish between different data types (though practically we of course do).
 - $$V$$ is the set of typed contract variables. At this stage we don't distinguish between states of different contracts: logical assertions may refer to the state of any contract (e.g. to token balances in other contracts).
@@ -77,7 +77,7 @@ In the above:
 
 ### Verification Conditions for Blockchain Monitors
 
-Now we are in a position to formally specify verification conditions for blockchain monitors.
+_Verification conditions_ are verifiable mathematical statements, which encode a certain aspect of the system correctness; in our case they encode whether the blockchain transaction is correct wrt. the blockchain monitor. Having formally defined what are blockchain states, transactions, and monitors, we are now in a position to specify monitor verification conditions.
 
 **For a direct blockchain monitor** $$M_D = \langle F, P, H \rangle$$, we combine individual monitor conditions into larger ones:
 
@@ -91,13 +91,13 @@ Given the above combined conditions, we check these verification conditions:
 
 | Name | Verification condition |
 | -----| ---------------------- |
-| Must fail | $$\mathbb{C}_{\mathit{Fail}}  \implies X_i = \bot$$ |
-| Failure completeness | $$X_i = \bot \implies \mathbb{C}_{\mathit{Fail}}$$ |
-| Must succeed | $$\neg \mathbb{C}_{\mathit{Fail}} \wedge \mathbb{C}_{\mathit{Pass}} \implies X_i = \top$$ |
-| Success completeness | $$X_i = \top \implies \neg \mathbb{C}_{\mathit{Fail}} \wedge \mathbb{C}_{\mathit{Pass}}$$ |
-| Method correctness  | $$X_i = \top \implies \mathbb{C}_{\mathit{Hold}}$$ |
+| Must fail | $$\mathbb{C}_{\mathit{Fail}}  \implies (X_i = \bot)$$ |
+| Failure completeness | $$(X_i = \bot) \implies \mathbb{C}_{\mathit{Fail}}$$ |
+| Must succeed | $$\neg \mathbb{C}_{\mathit{Fail}} \wedge \mathbb{C}_{\mathit{Pass}} \implies (X_i = \top)$$ |
+| Success completeness | $$(X_i = \top) \implies \neg \mathbb{C}_{\mathit{Fail}} \wedge \mathbb{C}_{\mathit{Pass}}$$ |
+| Method correctness  | $$(X_i = \top) \implies \mathbb{C}_{\mathit{Hold}}$$ |
 
-Please feel free to contrast these formal verification conditions with the [informal conditions from the previous post][part4directmonitors]. Notice also that the two implications from the pairs "Must fail"/"Failure completeness" and "Must succeed"/"Success completeness" encode together an equivalence between the checks and the transaction execution result. Nevertheless, we consider it a better strategy to treat these conditions separately, as this allows the developers to encode a more fine-grained monitor response. For example, a monitor may forcefully revert a transaction that violates the "Must fail" condition, but only issue a warning when "Failure completeness" is violated.
+Please feel free to contrast these formal verification conditions with the [informal conditions from the previous post][part4directmonitors], as well as with the [TLA+ encoding of verification conditions for Timelock's `deposit` method][depositVCs]. Notice also that the two implications from the pairs "Must fail"/"Failure completeness" and "Must succeed"/"Success completeness" encode together an equivalence between the checks and the transaction execution result. Nevertheless, we consider it a better strategy to treat these conditions separately, as this allows the developers to encode a more fine-grained monitor response. For example, a monitor may forcefully revert a transaction that violates the "Must fail" condition, but only issue a warning when "Failure completeness" is violated.
 
 **For a reverse blockchain monitor** $$M_R = \langle C, A \rangle$$, we also combine individual monitor conditions into larger ones:
 
@@ -109,11 +109,27 @@ Reverse monitors encode only a single verification condition:
 
 | Name | Verification condition |
 | -----| ---------------------- |
-| Effect correctness | $$X_i = \top \wedge \mathbb{C}_{\mathit{Check}} \implies \mathbb{C}_{\mathit{Assert}}$$ |
+| Effect correctness | $$(X_i = \top) \wedge \mathbb{C}_{\mathit{Check}} \implies \mathbb{C}_{\mathit{Assert}}$$ |
 
-### Monitor verification complexity
+You may compare the above verification condition with the [informal condition from the previous post][part4reversemonitors], as well as with the [TLA+ encoding of verification conditions for `BalanceRecord` monitor][balanceRecordVCs].
 
-TODO
+
+### Model Checking Blockchain Monitors
+
+_Model checking_ is an automatic procedure of verifying mathematical specifications. Within [Solarkraft][], we employ [TLA+][] as our specification language, and [Apalache][] as our model checker. Here are a few details worth noting:
+
+- Apalache is a _general purpose_ model checker, in that it performs _invariant checking_: given an initial system state $$\mathit{Init}$$, an encoding of the system transitions (the _next-state relation_) $$\mathit{Next}$$, and an encoding of a supposed system invariant $$\mathit{Inv}$$, it checks whether the invariant does indeed hold in all system states reachable from the initial one by executing system transitions.
+- Apalache is a _bounded_ model checker: it can check invariants only in states reachable in a certain number of transition steps (the execution bound $$\mathit{Length}$$, say 1, 5, or 10) from the initial state.
+- Apalache is a _symbolic_ model checker, i.e. it encodes the the verification conditions symbolically, as formulas in certain logical theories, and passes the resulting encoding to _SMT solvers_, which are specialized tools for solving massive volumes of equations.
+
+We employ Apalache by encoding monitor verification conditions as an invariant checking problem. For any given blockchain environment $$E_i$$, the transaction pre-state $$S_i$$, the transaction being executed $$T_i$$, the transaction execution result $$X_i$$, the transaction post-state $$S_{i+1}$$, as well as any of the above verification conditions $$\mathit{VC}$$, we execute Apalache using the following encoding:
+
+- Initial state: $$\mathit{Init} = E_i \wedge S_i$$
+- Next-state relation: $$\mathit{Next} = T_i \wedge S_{i+1}$$
+- Invariant: $$\mathit{Inv} = \mathit{VC}$$
+- Execution bound: $$\mathit{Length} = 1$$
+
+
 
 ### Practical checking of monitor specifications
 
@@ -130,12 +146,15 @@ _Development of Solarkraft was supported by the [Stellar Development Foundation]
 
 
 [Solarkraft]: https://github.com/freespek/solarkraft
+[Apalache]: https://konnov.phd/portfolio/apalache/
 [part1]: https://thpani.net/2024/06/why-smart-contract-bugs-matter-and-how-runtime-monitoring-saves-the-day-solarkraft-1/
 [part2]: https://thpani.net/2024/06/small-and-modular-runtime-monitors-in-tla-for-soroban-smart-contracts-solarkraft-2/
 [part3]: https://protocols-made-fun.com/solarkraft/2024/06/19/solarkraft-part3.html
 [part4]: https://systems-made-simple.dev/solarkraft/2024/06/24/solarkraft-hybrid-monitors.html
 [part4directmonitors]: https://systems-made-simple.dev/solarkraft/2024/06/24/solarkraft-hybrid-monitors.html#direct-monitors
-
+[part4reversemonitors]: https://systems-made-simple.dev/solarkraft/2024/06/24/solarkraft-hybrid-monitors.html#reverse-monitors
+[depositVCs]: https://github.com/freespek/solarkraft/blob/cf26a544ab204220eab62a3545300cb689aa899b/doc/case-studies/timelock/deposit.tla#L66-L104
+[balanceRecordVCs]: https://github.com/freespek/solarkraft/blob/cf26a544ab204220eab62a3545300cb689aa899b/doc/case-studies/timelock/balance_record.tla#L31-L39
 [Igor Konnov]: https://konnov.phd
 [Jure Kukovec]: https://www.linkedin.com/in/jure-kukovec/
 [Andrey Kuprianov]: https://www.linkedin.com/in/andrey-kuprianov/
