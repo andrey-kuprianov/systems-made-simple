@@ -30,18 +30,48 @@ In this post we first formally define what are hybrid blockchain runtime monitor
 
 After reading the [previous post on hybrid blockchain monitors][part4] you may say: "All that is nice and good, but here are a few questions that still need to be addressed..." For people with different backgrounds these are probably the main ones:
 
-- A formal methods person: "How do you _verify_ blockchain monitor? What are your verification conditions?"
-- A math person: "What about verification _complexity_?"
-- A software engineering person: "How do you _practically check_ them on the live blockchain?"
+- 🕴CEO / CTO: "Huh? Formal methods? _Why do I need yet another monitoring solution?_ I already have the X/Y/Z system, and they send me real-time alerts!"
+- 👨‍🏫 Formal methods person: "How do you _verify_ blockchain monitor? What are your _verification conditions_?"
+- 🤓 Mathematician: "What about _verification complexity_?"
+- 🧔 Software engineer: "How do you _practically check_ them on the live blockchain?"
 
-This section outlines the answers to the above questions. **TL;DR**:
+This blog post outlines the answers to the above questions. **TL;DR**:
 
+- Formal methods-based blockchain monitors offer a unique combination of _compactness_ and _completeness_: formal monitor specifications are extremely compact, but, at the same time, they allow to detect and prevent a wide range of potential errors or exploits, which are out of reach of traditional alert-based monitoring solutions.
 - We verify blockchain monitors via a) producing verification conditions from each monitor specification; b) extracting pre- and post-states for every relevant blockchain transaction, as well as its parameters; c) validating each transaction against verification conditions using the [Apalache][] model checker.
 - Complexity of verifying blockchain monitors is _linear_ wrt. the number of conditions in the specification and the number of transactions: each condition is checked _at most once_ against every transaction (but many checks may be skipped/optimized away). On the other hand, the inherent logical complexity of checking _individual verification conditions_ is highly dependent on their nature, and may be both very low and very high; _it depends_. We do propose below some ways to combat this complexity, exploiting for that the modular nature of our monitors.
 - Practically, _in the current [Solarkraft system][Solarkraft]_, we verify blockchain monitors in _offline mode_ by first downloading transactions using `solarkraft fetch`, and then verifying them using `solarkraft verify`; as this doesn't allow to execute preventive measures, we want to move eventually into verifying monitor specifications on the live blockchain, i.e. we want to do _online monitoring_. There may be several intermediate-strength solutions to that problem, which we outline below.
 
-If you are still interested in the details -- continue reading!
+Caught your attention? Do you want a monitoring solution for your blockchain/ DEX / smart contract? <a href="mailto:andrey@kuprum.xyz">Give us a ping!</a> We are always happy to talk to you:)
 
+Are you interested in more details? Then continue reading!
+
+## Formal Blockchain Monitors are Super-Powerful 🦸
+
+In this section we answer the question from an imaginary CEO/CTO:
+> "Huh? Formal methods? Why do I need yet another monitoring solution? I already have the X/Y/Z system, and they send me real-time alerts!"
+
+As a general intro into the usefulness of runtime monitoring for blockchains we recommend the first episode from our blockchain series: ["A New Hope – Why Smart Contract Bugs Matter and How Runtime Monitoring Saves the Day"][part1]. But from the question we conclude that our CEO is already convinced that monitoring is useful, and is even using some other monitoring solution. So, **why do we need formal methods-based blockchain monitors?**
+
+To answer that question, **let's see what a typical blockchain monitoring solution offers:**
+
+- receive real-time alerts and notifications about blockchain events
+- understand usage patterns and fund flows with customized dashboards
+- visualize funding patterns, track wallets, report fraudulent activity
+- understand the risk of a transaction; simulate its outputs in real time
+
+Typically, some or all of the above activities can be parameterized, e.g. wrt. the addresses, or kinds of transactions, or amounts of funds, etc., which gives these systems a certain level of flexibility. Still, a typical monitoring system suffers from two main drawbacks:
+
+- Prevention techniques offered by typical  monitoring systems are most often incomplete: it is impossible to describe by any fixed set of rules the correctness conditions for an arbitrary smart contract.
+  - When attempts are made within standard monitoring systems to improve their completeness, these attempts usually lead to proliferation of more and more complex pattern-based rules, which are cumbersome to create and maintain, while still never achieving the necessary completeness level.
+- "Real-time alerts" happen post-factum, when the transaction has already committed its changes. This is already too late: receiving a notification that funds have been withdrawn doesn't help returning them.
+  - Some systems try to prevent harmful events by using throttling, i.e. limiting the amounts of fund transfers within a period of time. While helping to mitigate the harmful effects to some degree, these solutions are also unsatisfactory for two reasons: a) they can still be side-stepped (e.g. by decreasing the withdrawal speed, or using intermediaries); b) throttling restrictions lead to frustrating experience for legitimate users.
+
+Notice that the first problem (_monitoring incompleteness_) is exactly the reason for the second problem (_post-factum response_, _lack of harm prevention_): without being sure that we have described all possible valid/invalid cases, we can't really be sure to revert a transaction, even if we suspect it being harmful.
+
+**Here is where formal methods-based blockchain monitoring comes to save the day.** Formal methods offer a mathematical logic-based solution which allows in many cases to _completely specify and differentiate between valid/invalid transactions_. Moreover, employing such decades-proven specification languages as [TLA+][] helps to do it very compactly, and employing such powerful symbolic model checkers as [Apalache][] allows us to check formal specifications extremely fast, in fractions of a second. 
+
+**We will seamlessly integrate complete validation of transactions against monitor specifications directly into the transaction execution lifecycle.** With our current [Solarkraft system][Solarkraft] we have made the first step towards this ultimate goal of _online blockchain monitoring_; in the subsequent sections we elaborate in more details how we are going to proceed.
 
 
 ## Blockchain Monitors in Formal Attire 👔
@@ -156,12 +186,12 @@ We then execute Apalache using the following command:
 apalache-mc check --length=1 --init=Init --next=TxRes --inv=VC timelock_mon_tests.tla
 ```
 
-This encoding solves the aforementioned problems wrt. monolithic encoding: the feedback from the model checker explains in details what is the problem when an invariant is violated; and can also provide substantial improvements in terms of execution speed for monitors more complex than Timelock.
+This encoding solves the aforementioned problems wrt. monolithic encoding: the feedback from the model checker explains in details what is the problem when an invariant is violated; the encoding can also provide substantial improvements in terms of execution speed for monitors which are more complex than Timelock's.
 
 
 
 
-## Practical checking of monitor specifications
+## Practical Checking of Blockchain Monitors 🛠
 
 In the present [Solarkraft system][Solarkraft] we do what's called _offline monitoring_: we verify monitors _after_ the state has already been committed to the blockchain. The delay between the action and the response can be made very small, a few seconds, but due to the final nature of the committed transactions this is not enough: the changes (such as balance transfer) can't be undone. Our eventual goal is to perform _online monitoring_, i.e. to verify the monitors _before_ the state has been committed, in order to be able to do preventive actions. This far-reaching goal is non-trivial, and has a few intermediate-strength solutions, which we are about to explore now.
 
