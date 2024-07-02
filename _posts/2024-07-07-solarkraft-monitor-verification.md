@@ -17,7 +17,7 @@ tags:
   - "tlaplus"
 ---
 
-![]({{ site.baseurl }}/img/solarkraft.png)
+![Solarkraft](/img/solarkraft.png)
 
 _Solarkraft has been developed in collaboration by [Igor Konnov][], [Jure Kukovec][], [Andrey Kuprianov][] and [Thomas Pani][]._
 
