@@ -21,30 +21,30 @@ tags:
 
 _Solarkraft has been developed in collaboration by [Igor Konnov][], [Jure Kukovec][], [Andrey Kuprianov][] and [Thomas Pani][]._
 
-_This is the fifth and last in a series of blog posts introducing [Solarkraft][], a TLA+-based runtime monitoring solution for [Soroban smart contracts][Soroban]. The first post,_ ["A New Hope – Why Smart Contract Bugs Matter and How Runtime Monitoring Saves the Day"][part1] _gives an overview of smart contracts, explains how traditional security fails to address major challenges in securing crypto assets, and introduces runtime monitoring as a solution. The second post,_ ["Guardians of the Blockchain: Small and Modular Runtime Monitors in TLA+ for Soroban Smart Contracts"][part2] _introduces the language of Solarkraft monitors. The third post,_ ["How to Run Solarkraft"][part3] _gives an overview of the various features of Solarkraft, and explains how to use each one, step-by-step. The forth post, _ ["The Force Awakens: Hybrid Blockchain Runtime Monitors"][part4] _explores the distinctions between direct and reverse blockchain monitors._
+_This is the fifth and last in a series of blog posts introducing [Solarkraft][], a TLA+-based runtime monitoring solution for [Soroban smart contracts][Soroban]. The first post,_ ["A New Hope – Why Smart Contract Bugs Matter and How Runtime Monitoring Saves the Day"][part1] _gives an overview of smart contracts, explains how traditional security fails to address major challenges in securing crypto assets, and introduces runtime monitoring as a solution. The second post,_ ["Guardians of the Blockchain: Small and Modular Runtime Monitors in TLA+ for Soroban Smart Contracts"][part2] _introduces the language of Solarkraft monitors. The third post,_ ["How to Run Solarkraft"][part3] _gives an overview of the various features of Solarkraft, and explains how to use each one, step-by-step. The forth post,_ ["The Force Awakens: Hybrid Blockchain Runtime Monitors"][part4] _defines and explores the distinctions between direct and reverse blockchain monitors, which together form what we call hybrid monitors._
 
 In this post we first formally define what are hybrid blockchain runtime monitors (from the formal methods point of view), as then proceed to explore the far-reaching avenues of how to go from _offline monitoring_, as done now in Solarkraft, to truly _online monitoring_ on the live blockchain.
 
 
-## Verifying Blockchain Monitors
+## Verifying Runtime Monitors on a Blockchain
 
-All that is nice and good, but there are a few questions that still need to be addressed, as people with different backgrounds might feel:
+After reading the [previous post on hybrid blockchain monitors][part4] you may say: "All that is nice and good, but here are a few questions that still need to be addressed..." For people with different backgrounds these are probably the main ones:
 
-- A formal methods person: "How do you _verify_ monitor specs? What are your verification conditions?"
+- A formal methods person: "How do you _verify_ blockchain monitor? What are your verification conditions?"
 - A math person: "What about verification _complexity_?"
 - A software engineering person: "How do you _practically check_ them on the live blockchain?"
 
 This section outlines the answers to the above questions. TL;DR; for those who are not interested in these details:
 
-- We verify monitor specs via a) producing verification conditions from each monitor specification; b) extracting transactions from the blockchain; c) validating each transaction against verification conditions using the Apalache model checker.
-- Complexity of verifying monitor specs is _linear_ wrt. the number of conditions in the specification, and the number of transactions: each condition is checked _at most once_ against every transaction (but many checks may be skipped/optimized away).
-- Practically, we integrate monitor specs as outlined here in the `solarcraft verify` command; the documentation for which can be found elsewhere in this repo. `Solarcraft` is a tool that we write specifically for checking monitor specifications against blockchain transactions. Currently we are doing it in _offline mode_ by first downloading transactions using `solarcraft fetch`, and then verifying them; eventually we want to move into verifying monitor specs on the live blockchain, i.e. we want to do _online monitoring_.
+- We verify blockchain monitors via a) producing verification conditions from each monitor specification; b) extracting pre- and post-states for every relevant blockchain transaction, as well as its parameters; c) validating each transaction against verification conditions using the [Apalache][] model checker.
+- Complexity of verifying blockchain monitors is _linear_ wrt. the number of conditions in the specification, and the number of transactions: each condition is checked _at most once_ against every transaction (but many checks may be skipped/optimized away). On the other hand, the inherent logical complexity of checking _individual verification conditions_ is highly dependent on their nature, and may be both very low and very high; _it depends_. We do propose below some ways to combat this complexity, exploiting for that the modular nature of our monitors.
+- Practically, _in the current [Solarkraft system][Solarkraft]_, we verify blockchain monitors in _offline mode_ by first downloading transactions using `solarkraft fetch`, and then verifying them using `solarkraft verify`; as this doesn't allow to execute preventive measures, we want to move eventually into verifying monitor specs on the live blockchain, i.e. we want to do _online monitoring_. There may be several intermediate-strength solutions to that problem, which we outline below.
 
 If you are still interested in the details -- continue reading!
 
 
 
-## Blockchain Runtime Monitors in Formal Attire 👔
+## Blockchain Monitors in Formal Attire 👔
 
 In this section we define, using mathematical notation, what blockchain monitors are, and how to verify whether a blockchain transaction satisfies the conditions expressed by a monitor.
 
@@ -111,7 +111,7 @@ Reverse monitors encode only a single verification condition:
 | -----| ---------------------- |
 | Effect correctness | $$(X_i = \top) \wedge \mathbb{C}_{\mathit{Check}} \implies \mathbb{C}_{\mathit{Assert}}$$ |
 
-You may compare the above verification condition with the [informal condition from the previous post][part4reversemonitors], as well as with the [TLA+ encoding of verification conditions for `BalanceRecord` monitor][balanceRecordVCs].
+You may compare the above verification condition with the [informal condition from the previous post][part4reversemonitors], as well as with the [TLA+ encoding of verification conditions for the `BalanceRecord` monitor][balanceRecordVCs].
 
 
 ### Model Checking Blockchain Monitors
@@ -136,15 +136,13 @@ A few TLA+ tests for Apalache verification conditions can be found e.g. in [depo
 apalache-mc check --length=1 --init=Init_1 --next=Next_1 deposit_test.tla
 ```
 
-As explained above, Apalache is a _bounded_ model checker, but, specifically for monitoring, this restriction is irrelevant: Apalache is blazing fast at checking the above formulas!
+As explained above, Apalache is a _bounded_ model checker: in general this restriction starts to manifest itself from the execution depth of around 7 steps: the model checker slows down substantially when exploring execution traces longer than that. But specifically for monitoring this restriction is irrelevant: with the execution length of 1 Apalache is blazing fast at checking the above formulas in fractions of a second, so it's a perfect choice for monitoring applications.
 
-One important point of consideration is the flexibility of encoding monitor verification conditions for model checking. While in the above tests a monolithic encoding is used, they can also be encoded fine-grained, down to the smallest scale of a single direct monitor condition (one of $$F_j$$, $$P_j$$, $$H_j$$), or of a single reverse monitor condition (one of $$C_j$$, $$A_j$$). While for the Timelock example it doesn't make any difference wrt. the Apalache execution speed (it's very fast both at the finest and at the coarsest level), for other monitors the difference may be substantial; we will return to this point later on.
+One important point of consideration is the flexibility of encoding monitor verification conditions for model checking. While in the above tests a monolithic encoding is used (all monitor conditions are encoded as a single invariant), they can also be encoded fine-grained, down to the smallest scale of a single direct monitor condition (one of $$F_j$$, $$P_j$$, $$H_j$$), or a single reverse monitor condition (one of $$C_j$$, $$A_j$$) per invariant. While for the Timelock example it doesn't make any difference wrt. the Apalache execution speed (it's very fast both at the finest and at the coarsest level), for other, more complex monitors the difference may be substantial; we will return to this point later on.
 
-### Practical checking of monitor specifications
+## Practical checking of monitor specifications
 
-In the present [Solarkraft system][Solarkraft] we do what's called _offline monitoring_: we verify monitors _after_ the state has already been committed to the blockchain. Our eventual goal is to perform _online monitoring_, i.e. to verify the monitors _before_ the state has been committed, in order to be able to do preventive actions. This far-reaching goal is non-trivial, and has a few intermediate-strength solutions, which we are about to explore now.
-
-The 
+In the present [Solarkraft system][Solarkraft] we do what's called _offline monitoring_: we verify monitors _after_ the state has already been committed to the blockchain. The delay between the action and the response can be made very small, a few seconds, but due to the final nature of the committed transactions this is not enough: the changes (such as balance transfer) can't be undone. Our eventual goal is to perform _online monitoring_, i.e. to verify the monitors _before_ the state has been committed, in order to be able to do preventive actions. This far-reaching goal is non-trivial, and has a few intermediate-strength solutions, which we are about to explore now.
 
 ### Offline monitoring
 
