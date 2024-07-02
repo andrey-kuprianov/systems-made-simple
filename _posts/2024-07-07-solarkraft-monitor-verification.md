@@ -34,11 +34,11 @@ After reading the [previous post on hybrid blockchain monitors][part4] you may s
 - A math person: "What about verification _complexity_?"
 - A software engineering person: "How do you _practically check_ them on the live blockchain?"
 
-This section outlines the answers to the above questions. TL;DR; for those who are not interested in these details:
+This section outlines the answers to the above questions. **TL;DR**:
 
 - We verify blockchain monitors via a) producing verification conditions from each monitor specification; b) extracting pre- and post-states for every relevant blockchain transaction, as well as its parameters; c) validating each transaction against verification conditions using the [Apalache][] model checker.
-- Complexity of verifying blockchain monitors is _linear_ wrt. the number of conditions in the specification, and the number of transactions: each condition is checked _at most once_ against every transaction (but many checks may be skipped/optimized away). On the other hand, the inherent logical complexity of checking _individual verification conditions_ is highly dependent on their nature, and may be both very low and very high; _it depends_. We do propose below some ways to combat this complexity, exploiting for that the modular nature of our monitors.
-- Practically, _in the current [Solarkraft system][Solarkraft]_, we verify blockchain monitors in _offline mode_ by first downloading transactions using `solarkraft fetch`, and then verifying them using `solarkraft verify`; as this doesn't allow to execute preventive measures, we want to move eventually into verifying monitor specs on the live blockchain, i.e. we want to do _online monitoring_. There may be several intermediate-strength solutions to that problem, which we outline below.
+- Complexity of verifying blockchain monitors is _linear_ wrt. the number of conditions in the specification and the number of transactions: each condition is checked _at most once_ against every transaction (but many checks may be skipped/optimized away). On the other hand, the inherent logical complexity of checking _individual verification conditions_ is highly dependent on their nature, and may be both very low and very high; _it depends_. We do propose below some ways to combat this complexity, exploiting for that the modular nature of our monitors.
+- Practically, _in the current [Solarkraft system][Solarkraft]_, we verify blockchain monitors in _offline mode_ by first downloading transactions using `solarkraft fetch`, and then verifying them using `solarkraft verify`; as this doesn't allow to execute preventive measures, we want to move eventually into verifying monitor specifications on the live blockchain, i.e. we want to do _online monitoring_. There may be several intermediate-strength solutions to that problem, which we outline below.
 
 If you are still interested in the details -- continue reading!
 
@@ -122,23 +122,44 @@ _Model checking_ is an automatic procedure of verifying mathematical specificati
 - Apalache is a _bounded_ model checker: it can check invariants only in states reachable in a certain number of transition steps (the execution bound $$\mathit{Length}$$, say 1, 5, or 10) from the initial state.
 - Apalache is a _symbolic_ model checker, i.e. it encodes the the verification conditions symbolically, as formulas in certain logical theories, and passes the resulting encoding to _Satisfiability Modulo Theories (SMT) solvers_, which are specialized tools for solving massive volumes of math equations.
 
-We employ Apalache by encoding monitor verification conditions as an invariant checking problem. For any given blockchain environment $$E_i$$, the transaction pre-state $$S_i$$, the transaction being executed $$T_i$$, the transaction execution result $$X_i$$, the transaction post-state $$S_{i+1}$$, as well as any of the above verification conditions $$\mathit{VC}$$, we execute Apalache using the following encoding:
+_In the current system_ we employ Apalache by encoding monitor verification conditions as a _deadlock checking problem_: we encode the verification condition as part of the next-state relation. Thus, if the verification condition is violated, the system is unable to proceed (there is a deadlock), and this is detected by Apalache. Formally, for any given blockchain environment $$E_i$$, the transaction pre-state $$S_i$$, the transaction being executed $$T_i$$, the transaction execution result $$X_i$$, the transaction post-state $$S_{i+1}$$, as well as any of the above verification conditions $$\mathit{VC}$$, we execute Apalache using the following encoding:
 
 - Initial state: $$\mathit{Init} = E_i \wedge S_i$$
-- Next-state relation: $$\mathit{Next} = T_i \wedge S_{i+1}$$
-- Invariant: $$\mathit{Inv} = \mathit{VC}$$
+- Next-state relation: $$\mathit{Next} = T_i \wedge X_i \wedge S_{i+1} \wedge \mathit{VC}$$
+- Invariant: $$\mathit{Inv} = \top$$
 - Execution bound: $$\mathit{Length} = 1$$
 
 
-A few TLA+ tests for Apalache verification conditions can be found e.g. in [deposit_test.tla](https://github.com/freespek/solarkraft/blob/cf26a544ab204220eab62a3545300cb689aa899b/doc/case-studies/timelock/deposit_test.tla) (for the direct monitor of Timelock's `deposit` method), or in [balance_record_test.tla](https://github.com/freespek/solarkraft/blob/cf26a544ab204220eab62a3545300cb689aa899b/doc/case-studies/timelock/balance_record_test.tla) (for the reverse balance record monitor). In all cases Apalache is invoked in a similar fashion, e.g. like that for `deposit`'s first test:
+A few TLA+ tests for Apalache verification conditions using this encoding can be found e.g. in [deposit_test.tla](https://github.com/freespek/solarkraft/blob/cf26a544ab204220eab62a3545300cb689aa899b/doc/case-studies/timelock/deposit_test.tla) (for the direct monitor of Timelock's `deposit` method), or in [balance_record_test.tla](https://github.com/freespek/solarkraft/blob/cf26a544ab204220eab62a3545300cb689aa899b/doc/case-studies/timelock/balance_record_test.tla) (for the reverse balance record monitor). In all cases Apalache is invoked in a similar fashion, e.g. like that for `deposit`'s first test:
 
 ```sh
 apalache-mc check --length=1 --init=Init_1 --next=Next_1 deposit_test.tla
 ```
 
-As explained above, Apalache is a _bounded_ model checker: in general this restriction starts to manifest itself from the execution depth of around 7 steps: the model checker slows down substantially when exploring execution traces longer than that. But specifically for monitoring this restriction is irrelevant: with the execution length of 1 Apalache is blazing fast at checking the above formulas in fractions of a second, so it's a perfect choice for monitoring applications.
+As explained above, Apalache is a _bounded_ model checker: it can check execution traces up to a certain bound. On most systems this restriction starts to manifest itself from the execution depth of around 7 steps: the model checker slows down substantially when exploring execution traces longer than that. But specifically for monitoring this restriction is irrelevant: with the execution length of 1 Apalache is blazing fast, and verifies the above formulas in fractions of a second, so it's a perfect choice for monitoring applications.
 
-One important point of consideration is the flexibility of encoding monitor verification conditions for model checking. While in the above tests a monolithic encoding is used (all monitor conditions are encoded as a single invariant), they can also be encoded fine-grained, down to the smallest scale of a single direct monitor condition (one of $$F_j$$, $$P_j$$, $$H_j$$), or a single reverse monitor condition (one of $$C_j$$, $$A_j$$) per invariant. While for the Timelock example it doesn't make any difference wrt. the Apalache execution speed (it's very fast both at the finest and at the coarsest level), for other, more complex monitors the difference may be substantial; we will return to this point later on.
+In the above tests a monolithic encoding is used: all monitor conditions are encoded as a single invariant, and also included into the next-state relation. This encoding is the compromise we had to make due to the very limited project timeline, and has a few drawbacks:
+
+- All verification conditions are lumped together into a single invariant, and, moreover, the invariant is part of the next-state relation. As a result, when the invariant is violated, the feedback from the model checker is suboptimal: it reports only that the system is unable to proceed (deadlocked), but doesn't explain the reason for that (as no invariant was violated).
+- In cases more complex than Timelock, verifying a single large invariant may become way more time-consuming than the sum of times for verifying each individual invariant separately, due to ultimately exponential nature of the resulting logical problem.
+
+In general, we can be more flexible in encoding monitor verification conditions for model checking. E.g. in the [preceding version of Timelock's monitors](https://github.com/freespek/solarkraft/blob/f16a96e22c73aa4bbcb4a2fba56f8a61321db00f/doc/case-studies/timelock/timelock_mon_tests.tla) we encoded one _combined monitor condition_ per invariant. Finally, verification conditions can also be encoded very fine-grained, down to the smallest scale, when an invariant to be checked contains a single direct monitor condition (one of $$F_j$$, $$P_j$$, $$H_j$$), or a single reverse monitor condition (one of $$C_j$$, $$A_j$$). In all those cases, we encode a verification condition $$\mathit{VC}$$ as an _invariant checking problem_ for Apalache in the following way:
+
+- Initial state: $$\mathit{Init} = E_i \wedge S_i$$
+- Next-state relation: $$\mathit{Next} = T_i \wedge X_i \wedge S_{i+1}$$
+- Invariant: $$\mathit{Inv} = \mathit{VC}$$
+- Execution bound: $$\mathit{Length} = 1$$
+
+We then execute Apalache using the following command:
+
+```sh
+apalache-mc check --length=1 --init=Init --next=TxRes --inv=VC timelock_mon_tests.tla
+```
+
+This encoding solves the aforementioned problems wrt. monolithic encoding: the feedback from the model checker explains in details what is the problem when an invariant is violated; and can also provide substantial improvements in terms of execution speed for monitors more complex than Timelock.
+
+
+
 
 ## Practical checking of monitor specifications
 
