@@ -37,7 +37,7 @@ After reading the [previous post on hybrid blockchain monitors][part4] you may s
 
 This blog post outlines the answers to the above questions. **TL;DR**:
 
-- Formal methods-based blockchain monitors offer a unique combination of _compactness_ and _completeness_: formal monitor specifications are extremely compact, but, at the same time, they allow to detect and prevent a wide range of potential errors or exploits, which are out of reach of traditional alert-based monitoring solutions.
+- Formal methods-based blockchain monitors offer a unique combination of _conciseness_ and _completeness_: formal monitor specifications are extremely compact, but, at the same time, they allow to completely specify and differentiate valid/invalid transactions, and to detect and prevent a wide range of potential errors or exploits, which are out of reach of traditional alert-based monitoring solutions.
 - We verify blockchain monitors via a) producing verification conditions from each monitor specification; b) extracting pre- and post-states for every relevant blockchain transaction, as well as its parameters; c) validating each transaction against verification conditions using the [Apalache][] model checker.
 - Complexity of verifying blockchain monitors is _linear_ wrt. the number of conditions in the specification and the number of transactions: each condition is checked _at most once_ against every transaction (but many checks may be skipped/optimized away). On the other hand, the inherent logical complexity of checking _individual verification conditions_ is highly dependent on their nature, and may be both very low and very high; _it depends_. We do propose below some ways to combat this complexity, exploiting for that the modular nature of our monitors.
 - Practically, _in the current [Solarkraft system][Solarkraft]_, we verify blockchain monitors in _offline mode_ by first downloading transactions using `solarkraft fetch`, and then verifying them using `solarkraft verify`; as this doesn't allow to execute preventive measures, we want to move eventually into verifying monitor specifications on the live blockchain, i.e. we want to do _online monitoring_. There may be several intermediate-strength solutions to that problem, which we outline below.
@@ -69,7 +69,7 @@ Typically, some or all of the above activities can be parameterized, e.g. wrt. t
 
 Notice that the first problem (_monitoring incompleteness_) is exactly the reason for the second problem (_post-factum response_, _lack of harm prevention_): without being sure that we have described all possible valid/invalid cases, we can't really be sure to revert a transaction, even if we suspect it being harmful.
 
-**Here is where formal methods-based blockchain monitoring comes to save the day.** Formal methods offer a mathematical logic-based solution which allows in many cases to _completely specify and differentiate between valid/invalid transactions_. Moreover, employing such decades-proven specification languages as [TLA+][] helps to do it very compactly, and employing such powerful symbolic model checkers as [Apalache][] allows us to check formal specifications extremely fast, in fractions of a second. 
+**Here is where formal methods-based blockchain monitoring comes to save the day.** Formal methods offer a mathematical logic-based solution which allows in many cases to _completely specify and differentiate valid/invalid transactions_. Moreover, using such decades-proven specification languages as [TLA+][] helps to do it very compactly, and employing such powerful symbolic model checkers as [Apalache][] allows us to check formal specifications extremely fast, in fractions of a second. 
 
 **We will seamlessly integrate complete validation of transactions against monitor specifications directly into the transaction execution lifecycle.** With our current [Solarkraft system][Solarkraft] we have made the first step towards this ultimate goal of _online blockchain monitoring_; in the subsequent sections we elaborate in more details how we are going to proceed.
 
@@ -173,7 +173,7 @@ In the above tests a monolithic encoding is used: all monitor conditions are enc
 - All verification conditions are lumped together into a single invariant, and, moreover, the invariant is part of the next-state relation. As a result, when the invariant is violated, the feedback from the model checker is suboptimal: it reports only that the system is unable to proceed (deadlocked), but doesn't explain the reason for that (as no invariant was violated).
 - In cases more complex than Timelock, verifying a single large invariant may become way more time-consuming than the sum of times for verifying each individual invariant separately, due to ultimately exponential nature of the resulting logical problem.
 
-In general, we can be more flexible in encoding monitor verification conditions for model checking. E.g. in the [preceding version of Timelock's monitors](https://github.com/freespek/solarkraft/blob/f16a96e22c73aa4bbcb4a2fba56f8a61321db00f/doc/case-studies/timelock/timelock_mon_tests.tla) we encoded one _combined monitor condition_ per invariant. Finally, verification conditions can also be encoded very fine-grained, down to the smallest scale, when an invariant to be checked contains a single direct monitor condition (one of $$F_j$$, $$P_j$$, $$H_j$$), or a single reverse monitor condition (one of $$C_j$$, $$A_j$$). In all those cases, we encode a verification condition $$\mathit{VC}$$ as an _invariant checking problem_ for Apalache in the following way:
+In general, we can be more flexible in encoding monitor verification conditions for model checking. E.g. in [another version of Timelock's monitors](https://github.com/freespek/solarkraft/blob/f16a96e22c73aa4bbcb4a2fba56f8a61321db00f/doc/case-studies/timelock/timelock_mon_tests.tla) we encoded one _combined monitor condition_ per invariant. Finally, verification conditions can also be encoded very fine-grained, down to the smallest scale, when an invariant to be checked contains a single direct monitor condition (one of $$F_j$$, $$P_j$$, $$H_j$$), or a single reverse monitor condition (one of $$C_j$$, $$A_j$$). In all those cases, we encode a verification condition $$\mathit{VC}$$ as an _invariant checking problem_ for Apalache in the following way:
 
 - Initial state: $$\mathit{Init} = E_i \wedge S_i$$
 - Next-state relation: $$\mathit{Next} = T_i \wedge X_i \wedge S_{i+1}$$
@@ -195,10 +195,29 @@ This encoding solves the aforementioned problems wrt. monolithic encoding: the f
 
 In the present [Solarkraft system][Solarkraft] we do what's called _offline monitoring_: we verify monitors _after_ the state has already been committed to the blockchain. The delay between the action and the response can be made very small, a few seconds, but due to the final nature of the committed transactions this is not enough: the changes (such as balance transfer) can't be undone. Our eventual goal is to perform _online monitoring_, i.e. to verify the monitors _before_ the state has been committed, in order to be able to do preventive actions. This far-reaching goal is non-trivial, and has a few intermediate-strength solutions, which we are about to explore now.
 
-### Offline monitoring
+**Offline monitoring** is is the simplest blockchain monitoring solution, applied both by standard blockchain monitors, as well as by our [current Solarkraft system][Solarkraft]:
 
+- A transaction is committed on the blockchain;
+- At some later time point, the transaction effects are observed: `solarkraft fetch`;
+- Transaction is validated, and acted upon: `solarkraft verify --alert`.
 
+This approach is useful in that the reaction to the event (a transaction) may happen in _near real time_: a few seconds later. The problem is that for blockchain this is not enough: what matters is the logical state on the blockchain, which, when committed, is irreversible (except for hard forks). Thus, in many cases, the reaction can't prevent the possible harm being done.
 
+To better understand how preventive actions may be done, let's take a look at [Stellar's transaction lifecycle][transaction-lifecycle]. The important points where a monitoring system may intervene in the transaction lifecycle are the steps 3, 8, and 10:
+
+> 1. Creation (Transaction Creator)
+> 2. Signing (Transaction Signers)
+> 3. **Submitting  (Transaction Submitter): After signing, the transaction can now be submitted to the Stellar network. If the transaction is invalid, it will be rejected immediately by Stellar Core...**
+> 4. Propagating (Validator)
+> 5. Crafting a candidate transaction set (Validator)
+> 6. Nominating a transaction set (Validator)
+> 7. Stellar Consensus Protocol (SCP) determines the final transaction set (Validator Network)
+> 8. **Transaction apply order is determined (Validator Network): Once SCP agrees on a particular transaction set, the apply order is computed for the transaction set. This shuffles the set's order to create uncertainty for competing transactions and maintains the order of sequence numbers for multiple transactions per account.**
+> 9. Fees are collected (Validator)
+> 10. **Application (Validator): Each transaction is applied in the previously-determined order. For each transaction, the account’s sequence number is consumed (increased by 1), the transaction’s validity is rechecked, and each operation is applied in the order they occur in the transaction...**
+> 11. Protocol Upgrades (Validator)
+
+-----
 
 _Development of Solarkraft was supported by the [Stellar Development Foundation][] with a generous Activation Award from the [Stellar Community Fund][] of 50,000 USD in XLM._
 
@@ -225,4 +244,4 @@ _Development of Solarkraft was supported by the [Stellar Development Foundation]
 [Stellar]: https://en.wikipedia.org/wiki/Stellar_\(payment_network\)
 [TLA+]: https://en.wikipedia.org/wiki/TLA%2B
 
-[transaction]: https://developers.stellar.org/docs/learn/fundamentals/transactions/transaction-lifecycle
+[transaction-lifecycle]: https://developers.stellar.org/docs/learn/fundamentals/transactions/transaction-lifecycle
