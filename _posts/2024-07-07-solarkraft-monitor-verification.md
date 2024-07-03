@@ -26,7 +26,7 @@ _This is the fifth and last in a series of blog posts introducing [Solarkraft][]
 In this post we first formally define what are hybrid blockchain runtime monitors (from the formal methods point of view), as then proceed to explore the far-reaching avenues of how to go from _offline monitoring_, as done now in Solarkraft, to truly _online monitoring_ on the live blockchain.
 
 
-## Verifying Runtime Monitors on a Blockchain
+## Verifying Runtime Monitors on a Blockchain 📒
 
 After reading the [previous post on hybrid blockchain monitors][part4] you may say: "All that is nice and good, but here are a few questions that still need to be addressed..." For people with different backgrounds these are probably the main ones:
 
@@ -71,7 +71,7 @@ Notice that the first problem (_monitoring incompleteness_) is exactly the reaso
 
 **Here is where formal methods-based blockchain monitoring comes to save the day.** Formal methods offer a mathematical logic-based solution which allows in many cases to _completely specify and differentiate valid/invalid transactions_. Moreover, using such decades-proven specification languages as [TLA+][] helps to do it very compactly, and employing such powerful symbolic model checkers as [Apalache][] allows us to check formal specifications extremely fast, in fractions of a second. 
 
-**We will seamlessly integrate complete validation of transactions against monitor specifications directly into the transaction execution lifecycle.** With our current [Solarkraft system][Solarkraft] we have made the first step towards this ultimate goal of _online blockchain monitoring_; in the subsequent sections we elaborate in more details how we are going to proceed.
+**We plan to seamlessly integrate complete validation of transactions against monitor specifications directly into the transaction execution lifecycle.** With our current [Solarkraft system][Solarkraft] we have made the first step towards this ultimate goal of _online blockchain monitoring_; in the subsequent sections we elaborate in more details about the technical details, as well as the next steps towards our goal.
 
 
 ## Blockchain Monitors in Formal Attire 👔
@@ -203,19 +203,32 @@ In the present [Solarkraft system][Solarkraft] we do what's called _offline moni
 
 This approach is useful in that the reaction to the event (a transaction) may happen in _near real time_: a few seconds later. The problem is that for blockchain this is not enough: what matters is the logical state on the blockchain, which, when committed, is irreversible (except for hard forks). Thus, in many cases, the reaction can't prevent the possible harm being done.
 
-To better understand how preventive actions may be done, let's take a look at [Stellar's transaction lifecycle][transaction-lifecycle]. The important points where a monitoring system may intervene in the transaction lifecycle are the steps 3, 8, and 10:
+To better understand how preventive actions may be done, let's take a look at [Stellar's transaction lifecycle][transaction-lifecycle]. The important points where a monitoring system may intervene in the transaction lifecycle are the steps 3, 7, and 10:
 
 > 1. Creation (Transaction Creator)
 > 2. Signing (Transaction Signers)
-> 3. **Submitting  (Transaction Submitter): After signing, the transaction can now be submitted to the Stellar network. If the transaction is invalid, it will be rejected immediately by Stellar Core...**
+> 3. **Submitting  (Transaction Submitter): After signing, the transaction can now be submitted to the Stellar network. If the transaction is invalid, it will be rejected immediately by Stellar Core.**
 > 4. Propagating (Validator)
 > 5. Crafting a candidate transaction set (Validator)
 > 6. Nominating a transaction set (Validator)
-> 7. Stellar Consensus Protocol (SCP) determines the final transaction set (Validator Network)
-> 8. **Transaction apply order is determined (Validator Network): Once SCP agrees on a particular transaction set, the apply order is computed for the transaction set. This shuffles the set's order to create uncertainty for competing transactions and maintains the order of sequence numbers for multiple transactions per account.**
+> 7. **Stellar Consensus Protocol (SCP) determines the final transaction set (Validator Network). SCP resolves any differences between candidate transaction sets and ultimately determines a single transaction set to apply, the close time of the ledger, and any upgrades to the protocol that need to be applied network-wide at the apply time.**
+> 8. Transaction apply order is determined (Validator Network)
 > 9. Fees are collected (Validator)
-> 10. **Application (Validator): Each transaction is applied in the previously-determined order. For each transaction, the account’s sequence number is consumed (increased by 1), the transaction’s validity is rechecked, and each operation is applied in the order they occur in the transaction...**
+> 10. **Application (Validator): Each transaction is applied in the previously-determined order. For each transaction, the account’s sequence number is consumed (increased by 1), the transaction’s validity is rechecked, and each operation is applied in the order they occur in the transaction. Operations may fail at this stage due to errors that can occur outside of the transaction and operation validity checks. For example, an insufficient balance for a payment is not checked at submission and would fail at this time.**
 > 11. Protocol Upgrades (Validator)
+
+Why are these steps important? Because exactly at these steps _new information appears, which influences transaction validity_:
+
+- Step 3: the transaction $$T_i$$ is determined: its parameters, signatures, etc.
+- Step 7: the blockchain environment $$E_i$$  is determined, in which $$T_i$$ will execute: 
+  - the set of transactions which will be executed together with $$T_i$$;
+  - $$T_i$$'s ledger number / timestamp;
+  - the starting state for ledger's transaction set, which is the end state of the previous ledger.
+- Step 10: the starting state $$S_i$$ for transaction $$T_i$$ is determined, which is the result of applying all other transactions preceding $$T_i$$ in the apply order determined at step 8.
+
+_It is worth noting that the apply order determined at step 8 is also a new information, which influences transaction validity (and ultimately determines $$S_i$$). Nevertheless, as steps 8-10 happen essentially at the same time (see [LedgerManagerImpl::closeLedger](https://github.com/stellar/stellar-core/blob/2ba9f8de47faca0b9e3bf3da540f38f15665606b/src/ledger/LedgerManagerImpl.cpp#L894-L906)), this difference in timing is immaterial. For conceptual reasons we prefer to focus on step 10._
+
+
 
 -----
 
