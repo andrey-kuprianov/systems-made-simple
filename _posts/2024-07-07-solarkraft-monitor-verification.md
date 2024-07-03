@@ -229,6 +229,21 @@ Why are these steps important? Because exactly at these steps _new information a
 _It is worth noting that the apply order determined at step 8 is also a new information, which influences transaction validity (and ultimately determines $$S_i$$). Nevertheless, as steps 8-10 happen essentially at the same time (see [LedgerManagerImpl::closeLedger](https://github.com/stellar/stellar-core/blob/2ba9f8de47faca0b9e3bf3da540f38f15665606b/src/ledger/LedgerManagerImpl.cpp#L894-L906)), this difference in timing is immaterial. For conceptual reasons we prefer to focus on step 10._
 
 
+When speaking about practicality, timing and throughput parameters start playing an important role:
+
+- Typical Stellar ledger close time: 5 seconds
+- Typical Stellar transaction throughput (transactions per second, TPS): 1000
+
+What does the above mean for validating blockchain monitors? Two things:
+
+- With each step, more information becomes available; thus more monitor verification conditions (VCs) can be validated:
+  - At step 3: _stateless_ VCs can be validated, i.e. those depending only on $$T_i$$;
+  - At step 7: _semi-stateful_ VCs, depending only on $$T_i$$ and $$E_i$$ can be validated;
+  - At step 10: all _stateful_ VCs can be validated.
+- With each step, the timing constraints become more and more strict (in order not to disrupt the core blockchain functionality):
+  - At step 3: any reasonable time (e.g. up to 10 seconds) can be allocated to execute the transaction checks;
+  - At step 7: a small portion of the ledger close time (e.g. up to 1 second) can be allocated for checking all ledger's transactions;
+  - At step 10: a tiny portion of ledger close time (e.g. up to 100 milliseconds) can be allocated for checking all ledger's transactions.
 
 -----
 
