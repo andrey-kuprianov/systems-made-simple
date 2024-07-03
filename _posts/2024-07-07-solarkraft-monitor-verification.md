@@ -240,10 +240,15 @@ What does the above mean for validating blockchain monitors? Two things:
   - At step 3: _stateless_ VCs can be validated, i.e. those depending only on $$T_i$$;
   - At step 7: _semi-stateful_ VCs, depending only on $$T_i$$ and $$E_i$$ can be validated;
   - At step 10: all _stateful_ VCs can be validated.
-- With each step, the timing constraints become more and more strict (in order not to disrupt the core blockchain functionality):
-  - At step 3: any reasonable time (e.g. up to 10 seconds) can be allocated to execute the transaction checks;
+- With each step, the timing constraints become more strict (in order not to disrupt the core blockchain functionality):
+  - At step 3: any reasonable time (e.g. up to 10 seconds) can be allocated to execute the transaction validity checks;
   - At step 7: a small portion of the ledger close time (e.g. up to 1 second) can be allocated for checking all ledger's transactions;
   - At step 10: a tiny portion of ledger close time (e.g. up to 100 milliseconds) can be allocated for checking all ledger's transactions.
+
+What can [Apalache][] model checker checker offer us in terms of validity checks execution time? For the Timelock example, the typical VC check time is around 1 second on a powerful laptop. Using such features as _Server Mode_ (see [[FEATURE] Server Mode](https://github.com/informalsystems/apalache/issues/730) and [RFC-010: Implementation of Transition Exploration Server](https://apalache.informal.systems/docs/adr/010rfc-transition-explorer.html)) the startup times can be amortized for multiple queries, and validity checking time reduced to something like 100 milliseconds. This sounds good! But a few problems still exist, unfortunately:
+
+- This is the checking time for a single transaction; but for steps 7 and 10 _all ledger's transactions_ need to be checked. Taking into account the blockchain parameters, this means checking up to 5000 transactions in 1 second (for step 7), or in 100 milliseconds (for step 10).
+- The Timelock example is one of the simplest imaginable in terms of its logical complexity. Thus, for more complex examples the VC checking time can be substantially higher.
 
 -----
 
