@@ -31,8 +31,8 @@ In this post we first formally define what are hybrid blockchain runtime monitor
 After reading the [previous post on hybrid blockchain monitors][part4] you may say: "All that is nice and good, but here are a few questions that still need to be addressed..." For people with different backgrounds these are probably the main ones:
 
 - 🕴CEO / CTO: "Huh? Formal methods? _Why do I need yet another monitoring solution?_ I already have the X/Y/Z system, and they send me real-time alerts!"
-- 👨‍🏫 Formal methods person: "How do you _verify_ blockchain monitor? What are your _verification conditions_?"
-- 🤓 Mathematician: "What about _verification complexity_?"
+- 🤓 Formal methods person: "How do you _verify_ blockchain monitor? What are your _verification conditions_?"
+- 👨‍🏫 Mathematician: "What about _verification complexity_?"
 - 🧔 Software engineer: "How do you _practically check_ them on the live blockchain?"
 
 This blog post outlines the answers to the above questions. **TL;DR**:
@@ -257,11 +257,23 @@ Taking all of the above in consideration we have two (mostly independent) strate
 As can be seen from the analysis above, **model checking has to provide hard real time execution guarantees for validity checks**, 
  such as _"up to 5000 transactions can be checked in 100 milliseconds"_. How can this be done? Below are a few ideas on how to achieve that.
 
-**Software engineering improvements**. Features such as Server Mode can substantially reduce startup times, giving up to 10x checking time reduction. This feature is mostly implemented, but still needs some polishing. Other useful features would be efficient parallelization (also partially implemented): given a 5000 transactions, each independently checkable in 100 ms, and being able to execute the checks in parallel, would allow us to execute all ledger's transactions checks in 100 ms.
+**Software engineering improvements**. Features such as Server Mode can substantially reduce startup times, giving up to 10x checking time reduction. This feature is mostly implemented, but still needs some polishing. Another useful feature would be efficient parallelization (also partially implemented): given 5000 transactions, each independently checkable in 100 ms, and being able to execute the checks in parallel, would allow us to execute all ledger's transactions checks in 100 ms.
 
 **Model checking problem decomposition.** Our [hybrid blockchain monitors][part4] are already quite modular, in the sense that each monitor is expressed as a combination of simple conditions. As we explained in the previous sections, the verification conditions can be checked independently for each monitor condition, and then combined at the boolean level. Solving each of the resulting subproblem independently will allow both for parallelization (see above), as well as to use specialized solvers for each subproblem, with different complexity constraints (see below). We could employ the [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic) to describe the boolean structure of the overall problem, with the _Unknown_ value expressing that the model checking is not possible with the available information, or didn't terminate within the required hard time bound. Using then logical connectors from the three-valued logic would allow us to provide meaningful answers in some cases when the standard model checking procedure would not terminate.
 
 **Theory-specific solvers for subproblems.** Apalache reduces model checking problem to the QF_UFLIA logic (Quantifier-free theory of linear integer arithmetic). While being very general and powerful, this theory has at the same time the worst-case exponential complexity. When looking at moderately large model checking problems as a whole (even at Timelock) this theory becomes a necessity. When looking at subproblems though, simpler theories could be employed; examples of those are QF_EUF (Quantifier-free theory of equality and uninterpreted functions) with the worst-case $$n \cdot \mathit{log}(n)$$ complexity, or QF_IDL (Quantifier-free theory of integer difference logic), with the worst-case cubic complexity. Putting aside record access, which can be abstracted away in some cases, examples of subproblems with reduced complexity in the Timelock case can be found in the [Balance Record monitor](https://github.com/freespek/solarkraft/blob/cf26a544ab204220eab62a3545300cb689aa899b/doc/case-studies/timelock/balance_record.tla#L10-L25), which falls under QF_EUF theory, or [Claim's `MustHold` monitor conditions](https://github.com/freespek/solarkraft/blob/cf26a544ab204220eab62a3545300cb689aa899b/doc/case-studies/timelock/claim.tla#L30-L38), which falls under QF_IDL theory.
+
+
+### Blockchain Engineering for Runtime Monitoring
+
+All of the above model checking improvements are useless if they can't be applied at the right time and place. For that, a proper **integration of monitoring into transaction lifecycle is necessary**, specifically to be able to execute preventive measures when a violating transaction is detected. Based of the transaction lifecycle outlined above, here is how we see this can be done:
+
+**Execute stateless validity checks at transaction submission time**. At step 3, when a transaction is submitted to the blockchain, stateless checks (depending only in $$T_i$$) can be executed; this needs to be done at Stellar Core, as the single controllable point of entry for all incoming transactions. As timing requirements are not too strict at that point, Apalache can be employed as is (only the software engineering improvements would be useful for efficiency reasons).
+
+**Execute semi-stateful validity checks when SCP decides ledger's transaction set**. This can be done by the validator network; the timing requirements become moderately strict, so model checking problem decomposition becomes necessary.
+
+**Execute stateful checks when transactions are applied**. This is done by a validator node, and the timing requirements are the most strict ones, so all model checking improvements become necessary. Inevitably there will be cases when model checking won't will exceed the timing requirements, returning the _Unknown_ answer, so the monitoring system should be configurable with actions to be executed for such cases. E.g. in the most critical cases a transaction can be reverted; in less critical ones a transaction may pass, but an alert issued. 
+
 
 -----
 
