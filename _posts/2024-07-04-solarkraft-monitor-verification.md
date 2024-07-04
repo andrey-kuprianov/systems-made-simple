@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "The Rise of Model Checker: Verifying Blockchain Monitors In and Near Realtime"
-date: 2024-07-07
+date: 2024-07-04
 categories: 
   - "solarkraft"
 tags: 
@@ -42,7 +42,7 @@ This blog post outlines the answers to the above questions. **TL;DR**:
 - Complexity of verifying blockchain monitors is _linear_ wrt. the number of conditions in the specification and the number of transactions: each condition is checked _at most once_ against every transaction (but many checks may be skipped/optimized away). On the other hand, the inherent logical complexity of checking _individual verification conditions_ is highly dependent on their nature, and may be both very low and very high; _it depends_. We do propose below some ways to combat this complexity, exploiting for that the modular nature of our monitors.
 - Practically, _in the current [Solarkraft system][Solarkraft]_, we verify blockchain monitors in _offline mode_ by first downloading transactions using `solarkraft fetch`, and then verifying them using `solarkraft verify`; as this doesn't allow to execute preventive measures, we want to move eventually into verifying monitor specifications on the live blockchain, i.e. we want to do _online monitoring_. There may be several intermediate-strength solutions to that problem, which we outline below.
 
-Caught your attention? Do you want a monitoring solution for your blockchain/ DEX / smart contract? <a href="mailto:andrey@kuprum.xyz">Give us a ping!</a> We are always happy to talk to you:)
+Caught your attention? Do you want a monitoring solution for your blockchain project? <a href="mailto:andrey@kuprum.xyz">Give us a ping!</a> We are always happy to talk to you:)
 
 Are you interested in more details? Then continue reading!
 
@@ -261,7 +261,7 @@ As can be seen from the analysis above, **model checking has to provide hard rea
 
 **Model checking problem decomposition.** Our [hybrid blockchain monitors][part4] are already quite modular, in the sense that each monitor is expressed as a combination of simple conditions. As we explained in the previous sections, the verification conditions can be checked independently for each monitor condition, and then combined at the boolean level. Solving each of the resulting subproblem independently will allow both for parallelization (see above), as well as to use specialized solvers for each subproblem, with different complexity constraints (see below). We could employ the [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic) to describe the boolean structure of the overall problem, with the _Unknown_ value expressing that the model checking is not possible with the available information, or didn't terminate within the required hard time bound. Using then logical connectors from the three-valued logic would allow us to provide meaningful answers in some cases when the standard model checking procedure would not terminate.
 
-**Theory-specific solvers for subproblems.** Apalache reduces model checking problem to the QF_UFLIA logic (Quantifier-free theory of linear integer arithmetic). While being very general and powerful, this theory has at the same time the worst-case exponential complexity. When looking at moderately large model checking problems as a whole (even at Timelock) this theory becomes a necessity. When looking at subproblems though, simpler theories could be employed; examples of those are QF_EUF (Quantifier-free theory of equality and uninterpreted functions) with the worst-case $$n \cdot \mathit{log}(n)$$ complexity, or QF_IDL (Quantifier-free theory of integer difference logic), with the worst-case cubic complexity. Putting aside record access, which can be abstracted away in some cases, examples of subproblems with reduced complexity in the Timelock case can be found in the [Balance Record monitor](https://github.com/freespek/solarkraft/blob/cf26a544ab204220eab62a3545300cb689aa899b/doc/case-studies/timelock/balance_record.tla#L10-L25), which falls under QF_EUF theory, or [Claim's `MustHold` monitor conditions](https://github.com/freespek/solarkraft/blob/cf26a544ab204220eab62a3545300cb689aa899b/doc/case-studies/timelock/claim.tla#L30-L38), which falls under QF_IDL theory.
+**Theory-specific solvers for subproblems.** Apalache reduces model checking problem to the QF_NIA logic (Quantifier-free theory of nonlinear integer arithmetic). While being very general and powerful, this theory is in the worst case undecidable. When looking at moderately large model checking problems as a whole (even at Timelock) at least QF_LIA (Quantifier-free theory of linear integer arithmetic) is required, which is a subtheory of QF_NIA with exponential complexity. When looking at subproblems though, simpler theories could be employed; examples of those are QF_EUF (Quantifier-free theory of equality and uninterpreted functions) with the worst-case $$n \cdot \mathit{log}(n)$$ complexity, or QF_IDL (Quantifier-free theory of integer difference logic), with the worst-case cubic complexity. Putting aside record access (which can be abstracted away in some cases) examples of subproblems with reduced complexity in the Timelock case can be found in the [Balance Record monitor](https://github.com/freespek/solarkraft/blob/cf26a544ab204220eab62a3545300cb689aa899b/doc/case-studies/timelock/balance_record.tla#L10-L25), which falls under QF_EUF theory, or [Claim's `MustHold` monitor conditions](https://github.com/freespek/solarkraft/blob/cf26a544ab204220eab62a3545300cb689aa899b/doc/case-studies/timelock/claim.tla#L30-L38), which is expressible in QF_IDL theory.
 
 
 ### Blockchain Engineering for Runtime Monitoring
@@ -270,10 +270,23 @@ All of the above model checking improvements are useless if they can't be applie
 
 **Execute stateless validity checks at transaction submission time**. At step 3, when a transaction is submitted to the blockchain, stateless checks (depending only in $$T_i$$) can be executed; this needs to be done at Stellar Core, as the single controllable point of entry for all incoming transactions. As timing requirements are not too strict at that point, Apalache can be employed as is (only the software engineering improvements would be useful for efficiency reasons).
 
-**Execute semi-stateful validity checks when SCP decides ledger's transaction set**. This can be done by the validator network; the timing requirements become moderately strict, so model checking problem decomposition becomes necessary.
+**Execute semi-stateful validity checks when SCP decides ledger's transaction set**. Semi-stateful checks (depending on $$T_i$$ and $$E_i$$) can be executed at step 7 by the validator network; the timing requirements become moderately strict, so model checking problem decomposition becomes necessary.
 
-**Execute stateful checks when transactions are applied**. This is done by a validator node, and the timing requirements are the most strict ones, so all model checking improvements become necessary. Inevitably there will be cases when model checking won't will exceed the timing requirements, returning the _Unknown_ answer, so the monitoring system should be configurable with actions to be executed for such cases. E.g. in the most critical cases a transaction can be reverted; in less critical ones a transaction may pass, but an alert issued. 
+**Execute stateful checks when transactions are applied**. This is done by a validator node at step 10, and the timing requirements are the most strict ones, so all model checking improvements become necessary. Inevitably there will be cases when model checking will exceed the timing requirements, returning the _Unknown_ answer, so the monitoring system should be configurable with actions to be executed when this happens. E.g. in the most critical cases a transaction can be reverted; in less critical cases a transaction may be allowed to pass, but an alert will be issued. 
 
+
+All of the above requires integration of formal-methods based monitoring into the central blockchain components. If this isn't possible for some reason for the whole blockchain, what can a project do in order to implement **individual project monitoring**? Though it's less efficient than the whole-blockchain solution, but a lot can still be done:
+
+**Perform stateless validation of user transactions via a dedicated service**. A project may require its users to submit transactions using `Permit`s via a centralized service, which will perform transaction validation by interacting with the monitoring system. The service, in case of successful checks, will sign and submit transaction to the blockchain. The on-chain components of the system need to be restricted to accept only such transactions which are signed by the service, and also validate user's `Permit` signatures.
+
+**During transaction processing, perform stateful checks via on-chain monitoring system**. An on-chain monitoring system can be implemented which will perform (limited) transaction validation. A project-specific contract, when receiving a transaction, will call into the monitoring system to perform transaction validation. This in turn can be done in two ways:
+
+- Implement on-chain solvers for simple theories such as as QF_EUF or QF_IDL, and validate the transaction within the same call. Some attempts in that direction have been undertaken already for EVM/Solidity, see e.g. the pilot project [EVM Symbolic Execution in Solidity](https://github.com/leonardoalt/dl_symb_exec_sol).
+- Accept transaction for validation, log it on-chain, and wait for an off-chain component to validate it. The off-chain component will commit the validation results on-chain, and the on-chain component will forward the result to the project-specific contract. This happens with an inevitable delay of at least 1 ledger: e.g. a transaction is submitted at ledger $$n$$, but validated and executed at ledger $$n+1$$. While slightly less convenient for the user, this allows to side-step hard real time requirements wrt. model checker execution.
+
+-----
+
+This post concludes our blog post series about the first phase of [Solarkraft][] development; we hope you've enjoyed it. Please don't hesitate to <a href="mailto:andrey@kuprum.xyz">write to us</a>: we are happy to hear from you, and discuss everything concerning the fascinating topic of blockchain runtime monitoring!
 
 -----
 
