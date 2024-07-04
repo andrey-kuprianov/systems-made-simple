@@ -231,8 +231,8 @@ _It is worth noting that the apply order determined at step 8 is also a new info
 
 When speaking about practicality, timing and throughput parameters start playing an important role:
 
-- Typical Stellar ledger close time: 5 seconds
-- Typical Stellar transaction throughput (transactions per second, TPS): 1000
+- Typical Stellar ledger close time: 5-6 seconds
+- Stellar transaction throughput (transactions per second, TPS): up to 1000
 
 What does the above mean for validating blockchain monitors? Two things:
 
@@ -245,10 +245,23 @@ What does the above mean for validating blockchain monitors? Two things:
   - At step 7: a small portion of the ledger close time (e.g. up to 1 second) can be allocated for checking all ledger's transactions;
   - At step 10: a tiny portion of ledger close time (e.g. up to 100 milliseconds) can be allocated for checking all ledger's transactions.
 
-What can [Apalache][] model checker checker offer us in terms of validity checks execution time? For the Timelock example, the typical VC check time is around 1 second on a powerful laptop. Using such features as _Server Mode_ (see [[FEATURE] Server Mode](https://github.com/informalsystems/apalache/issues/730) and [RFC-010: Implementation of Transition Exploration Server](https://apalache.informal.systems/docs/adr/010rfc-transition-explorer.html)) the startup times can be amortized for multiple queries, and validity checking time reduced to something like 100 milliseconds. This sounds good! But a few problems still exist, unfortunately:
+What can [Apalache][] model checker checker offer us in terms of validity checks execution time? For the Timelock example, the typical VC check time is around 1 second on a powerful laptop. Using such features as _Server Mode_ (mostly implemented, see [[FEATURE] Server Mode](https://github.com/informalsystems/apalache/issues/730) and [RFC-010: Implementation of Transition Exploration Server](https://apalache.informal.systems/docs/adr/010rfc-transition-explorer.html)) we expect the startup time (runtime setup, parsing, typechecking, preprocessing) to be amortized for multiple queries, and validity checking time to be reduced to something like 100 milliseconds. This sounds good! But a few problems still exist, unfortunately:
 
 - This is the checking time for a single transaction; but for steps 7 and 10 _all ledger's transactions_ need to be checked. Taking into account the blockchain parameters, this means checking up to 5000 transactions in 1 second (for step 7), or in 100 milliseconds (for step 10).
-- The Timelock example is one of the simplest imaginable in terms of its logical complexity. Thus, for more complex examples the VC checking time can be substantially higher.
+- The Timelock example is one of the simplest imaginable in terms of its logical complexity. Thus, for more complex examples the checking time can be substantially higher.
+
+Taking all of the above in consideration we have two (mostly independent) strategies of how blockchain monitors can be integrated into the transaction lifecycle: one  from formal methods point of view, and another from blockchain engineering point of view.
+
+### Model Checking Improvements for Blockchain Monitoring
+
+As can be seen from the analysis above, **model checking has to provide hard real time execution guarantees for validity checks**, 
+ such as _"up to 5000 transactions can be checked in 100 milliseconds"_. How can this be done? Below are a few ideas on how to achieve that.
+
+**Software engineering improvements**. Features such as Server Mode can substantially reduce startup times, giving up to 10x checking time reduction. This feature is mostly implemented, but still needs some polishing. Other useful features would be efficient parallelization (also partially implemented): given a 5000 transactions, each independently checkable in 100 ms, and being able to execute the checks in parallel, would allow us to execute all ledger's transactions checks in 100 ms.
+
+**Model checking problem decomposition.** Our [hybrid blockchain monitors][part4] are already quite modular, in the sense that each monitor is expressed as a combination of simple conditions. As we explained in the previous sections, the verification conditions can be checked independently for each monitor condition, and then combined at the boolean level. Solving each of the resulting subproblem independently will allow both for parallelization (see above), as well as to use specialized solvers for each subproblem, with different complexity constraints (see below). We could employ the [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic) to describe the boolean structure of the overall problem, with the _Unknown_ value expressing that the model checking is not possible with the available information, or didn't terminate within the required hard time bound. Using then logical connectors from the three-valued logic would allow us to provide meaningful answers in some cases when the standard model checking procedure would not terminate.
+
+**Theory-specific solvers for subproblems.** Apalache reduces model checking problem to the QF_UFLIA logic (Quantifier-free theory of linear integer arithmetic). While being very general and powerful, this theory has at the same time the worst-case exponential complexity. When looking at moderately large model checking problems as a whole (even at Timelock) this theory becomes a necessity. When looking at subproblems though, simpler theories could be employed; examples of those are QF_EUF (Quantifier-free theory of equality and uninterpreted functions) with the worst-case $$n \cdot \mathit{log}(n)$$ complexity, or QF_IDL (Quantifier-free theory of integer difference logic), with the worst-case cubic complexity. Putting aside record access, which can be abstracted away in some cases, examples of subproblems with reduced complexity in the Timelock case can be found in the [Balance Record monitor](https://github.com/freespek/solarkraft/blob/cf26a544ab204220eab62a3545300cb689aa899b/doc/case-studies/timelock/balance_record.tla#L10-L25), which falls under QF_EUF theory, or [Claim's `MustHold` monitor conditions](https://github.com/freespek/solarkraft/blob/cf26a544ab204220eab62a3545300cb689aa899b/doc/case-studies/timelock/claim.tla#L30-L38), which falls under QF_IDL theory.
 
 -----
 
