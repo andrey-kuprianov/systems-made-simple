@@ -19,10 +19,9 @@ tags:
 
 ![Solarkraft](/img/solarkraft.png)
 
-_This is the forth in a series of blog posts introducing [Solarkraft][], a TLA+-based runtime monitoring solution for [Soroban smart contracts][Soroban]. The first post,_ ["A New Hope – Why Smart Contract Bugs Matter and How Runtime Monitoring Saves the Day"][part1] _gives an overview of smart contracts, explains how traditional security fails to address major challenges in securing crypto assets, and introduces runtime monitoring as a solution. The second post,_ ["Guardians of the Blockchain: Small and Modular Runtime Monitors in TLA+ for Soroban Smart Contracts"][part2] _introduces the basic language of Solarkraft monitors. The third post,_ ["How to Run Solarkraft"][part3] _gives an overview of the various features of Solarkraft, and explains how to use each one, step-by-step._ 
-
-
 _Solarkraft has been developed in collaboration by [Igor Konnov][], [Jure Kukovec][], [Andrey Kuprianov][] and [Thomas Pani][]._
+
+_This is the forth in a series of blog posts introducing [Solarkraft][], a TLA+-based runtime monitoring solution for [Soroban smart contracts][Soroban]. The first post,_ ["A New Hope – Why Smart Contract Bugs Matter and How Runtime Monitoring Saves the Day"][part1] _gives an overview of smart contracts, explains how traditional security fails to address major challenges in securing crypto assets, and introduces runtime monitoring as a solution. The second post,_ ["Guardians of the Blockchain: Small and Modular Runtime Monitors in TLA+ for Soroban Smart Contracts"][part2] _introduces the basic language of Solarkraft monitors. The third post,_ ["How to Run Solarkraft"][part3] _gives an overview of the various features of Solarkraft, and explains how to use each one, step-by-step._ 
 
 While the previous posts explain the current state of the project, in this one we take one step further, and explore the directions in which we plan to evolve blockchain runtime monitoring with Solarkraft. Throughout the post we are using the same [`timelock` contract][timelock] from `soroban-examples` that was used in [Part 2: "Guardians of the Blockchain"][part2]; please explore at least this post first to acquire the necessary context.
 
@@ -158,14 +157,13 @@ Having these conditions in place does indeed make the combination of Timelock's 
 
 -----
 
-We will soon expand this blog post series with the final one, _"The Rise of Model Checker: Verifying Blockchain Monitors In and Near Realtime"_, where we will address these important questions: _"How to verify monitor specs, and what is the verification complexity?"_, as well as _"How to practically check them on the live blockchain?"_ Stay tuned!
+_Updated on 26.06.2024: replaced `Monitor<Trigger|Effect>` with `Monitor<Check|Assert>`_
 
-
-_Development of Solarkraft was supported by the [Stellar Development Foundation][] with a generous Activation Award from the [Stellar Community Fund][] of 50,000 USD in XLM._
+Done reading? Then proceed to the final post of this blog post series, ["The Rise of Model Checker: Verifying Blockchain Monitors In and Near Realtime"][part5], where we address these important questions: _"How to verify monitor specs, and what is the verification complexity?"_, as well as _"How to practically check them on the live blockchain?"_
 
 -----
 
-_Updated on 26.06.2024: replaced `Monitor<Trigger|Effect>` with `Monitor<Check|Assert>`_
+_Development of Solarkraft was supported by the [Stellar Development Foundation][] with a generous Activation Award from the [Stellar Community Fund][] of 50,000 USD in XLM._
 
 
 [Solarkraft]: https://github.com/freespek/solarkraft
@@ -173,6 +171,7 @@ _Updated on 26.06.2024: replaced `Monitor<Trigger|Effect>` with `Monitor<Check|A
 [part2]: https://thpani.net/2024/06/small-and-modular-runtime-monitors-in-tla-for-soroban-smart-contracts-solarkraft-2/
 [part3]: https://protocols-made-fun.com/solarkraft/2024/06/19/solarkraft-part3.html
 [part4]: https://systems-made-simple.dev/solarkraft/2024/06/24/solarkraft-hybrid-monitors.html
+[part5]: https://systems-made-simple.dev/solarkraft/2024/07/04/solarkraft-monitor-verification.html
 
 [Igor Konnov]: https://konnov.phd
 [Jure Kukovec]: https://www.linkedin.com/in/jure-kukovec/
